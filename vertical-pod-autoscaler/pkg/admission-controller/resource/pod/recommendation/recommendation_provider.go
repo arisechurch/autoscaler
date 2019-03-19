@@ -64,47 +64,6 @@ func GetContainersResources(pod *core.Pod, vpaResourcePolicy *vpa_types.PodResou
 		} else {
 			resources[i].Requests = recommendation.Target
 		}
-		defaultLimit := core.ResourceList{}
-		if limitRange != nil {
-			defaultLimit = limitRange.Default
-		}
-		containerControlledValues := vpa_api_util.GetContainerControlledValues(container.Name, vpaResourcePolicy)
-		if containerControlledValues == vpa_types.ContainerControlledValuesRequestsAndLimits {
-			proportionalLimits, limitAnnotations := vpa_api_util.GetProportionalLimit(container.Resources.Limits, container.Resources.Requests, resources[i].Requests, defaultLimit)
-			if proportionalLimits != nil {
-				resources[i].Limits = proportionalLimits
-				if len(limitAnnotations) > 0 {
-					annotations[container.Name] = append(annotations[container.Name], limitAnnotations...)
-				}
-			}
-		}
-		// If the recommendation only contains CPU or Memory (if the VPA was configured this way), we need to make sure we "backfill" the other.
-		// Only do this when the addAll flag is true.
-		if addAll {
-			if resources[i].Requests == nil {
-				resources[i].Requests = core.ResourceList{}
-			}
-			if resources[i].Limits == nil {
-				resources[i].Limits = core.ResourceList{}
-			}
-
-			cpuRequest, hasCpuRequest := container.Resources.Requests[core.ResourceCPU]
-			if _, ok := resources[i].Requests[core.ResourceCPU]; !ok && hasCpuRequest {
-				resources[i].Requests[core.ResourceCPU] = cpuRequest
-			}
-			memRequest, hasMemRequest := container.Resources.Requests[core.ResourceMemory]
-			if _, ok := resources[i].Requests[core.ResourceMemory]; !ok && hasMemRequest {
-				resources[i].Requests[core.ResourceMemory] = memRequest
-			}
-			cpuLimit, hasCpuLimit := container.Resources.Limits[core.ResourceCPU]
-			if _, ok := resources[i].Limits[core.ResourceCPU]; !ok && hasCpuLimit {
-				resources[i].Limits[core.ResourceCPU] = cpuLimit
-			}
-			memLimit, hasMemLimit := container.Resources.Limits[core.ResourceMemory]
-			if _, ok := resources[i].Limits[core.ResourceMemory]; !ok && hasMemLimit {
-				resources[i].Limits[core.ResourceMemory] = memLimit
-			}
-		}
 	}
 	return resources
 }

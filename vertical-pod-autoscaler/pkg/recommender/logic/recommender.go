@@ -29,13 +29,13 @@ var (
 	safetyMarginFraction       = flag.Float64("recommendation-margin-fraction", 0.15, `Fraction of usage added as the safety margin to the recommended request`)
 	podMinCPUMillicores        = flag.Float64("pod-recommendation-min-cpu-millicores", 25, `Minimum CPU recommendation for a pod`)
 	podMinMemoryMb             = flag.Float64("pod-recommendation-min-memory-mb", 250, `Minimum memory recommendation for a pod`)
-	targetCPUPercentile        = flag.Float64("target-cpu-percentile", 0.9, "CPU usage percentile that will be used as a base for CPU target recommendation. Doesn't affect CPU lower bound, CPU upper bound nor memory recommendations.")
+	targetCPUPercentile        = flag.Float64("target-cpu-percentile", 0.7, "CPU usage percentile that will be used as a base for CPU target recommendation. Doesn't affect CPU lower bound, CPU upper bound nor memory recommendations.")
 	lowerBoundCPUPercentile    = flag.Float64("recommendation-lower-bound-cpu-percentile", 0.5, `CPU usage percentile that will be used for the lower bound on CPU recommendation.`)
 	upperBoundCPUPercentile    = flag.Float64("recommendation-upper-bound-cpu-percentile", 0.95, `CPU usage percentile that will be used for the upper bound on CPU recommendation.`)
 	confidenceIntervalCPU      = flag.Duration("confidence-interval-cpu", time.Hour*24, "The time interval used for computing the confidence multiplier for the CPU lower and upper bound. Default: 24h")
-	targetMemoryPercentile     = flag.Float64("target-memory-percentile", 0.9, "Memory usage percentile that will be used as a base for memory target recommendation. Doesn't affect memory lower bound nor memory upper bound.")
-	lowerBoundMemoryPercentile = flag.Float64("recommendation-lower-bound-memory-percentile", 0.5, `Memory usage percentile that will be used for the lower bound on memory recommendation.`)
-	upperBoundMemoryPercentile = flag.Float64("recommendation-upper-bound-memory-percentile", 0.95, `Memory usage percentile that will be used for the upper bound on memory recommendation.`)
+	targetMemoryPercentile     = flag.Float64("target-memory-percentile", 0.6, "Memory usage percentile that will be used as a base for memory target recommendation. Doesn't affect memory lower bound nor memory upper bound.")
+	lowerBoundMemoryPercentile = flag.Float64("recommendation-lower-bound-memory-percentile", 0.4, `Memory usage percentile that will be used for the lower bound on memory recommendation.`)
+	upperBoundMemoryPercentile = flag.Float64("recommendation-upper-bound-memory-percentile", 0.8, `Memory usage percentile that will be used for the upper bound on memory recommendation.`)
 	confidenceIntervalMemory   = flag.Duration("confidence-interval-memory", time.Hour*24, "The time interval used for computing the confidence multiplier for the memory lower and upper bound. Default: 24h")
 	humanizeMemory             = flag.Bool("humanize-memory", false, "Convert memory values in recommendations to the highest appropriate SI unit with up to 2 decimal places for better readability.")
 	roundCPUMillicores         = flag.Int("round-cpu-millicores", 1, `CPU recommendation rounding factor in millicores. The CPU value will always be rounded up to the nearest multiple of this factor.`)
@@ -141,8 +141,8 @@ func CreatePodResourceRecommender() PodResourceRecommender {
 	// Apply confidence multiplier to the upper bound estimator. This means
 	// that the updater will be less eager to evict pods with short history
 	// in order to reclaim unused resources.
-	// Using the confidence multiplier 1 with exponent +1 means that
-	// the upper bound is multiplied by (1 + 1/history-length-in-days).
+	// Using the confidence multiplier 0.25 with exponent +1 means that
+	// the upper bound is multiplied by (1 + 0.25/history-length-in-days).
 	// See estimator.go to see how the history length and the confidence
 	// multiplier are determined. The formula yields the following multipliers:
 	// No history     : *INF  (do not force pod eviction)
@@ -150,8 +150,8 @@ func CreatePodResourceRecommender() PodResourceRecommender {
 	// 24h history    : *2
 	// 1 week history : *1.14
 
-	upperBoundCPU = WithCPUConfidenceMultiplier(1.0, 1.0, upperBoundCPU, *confidenceIntervalCPU)
-	upperBoundMemory = WithMemoryConfidenceMultiplier(1.0, 1.0, upperBoundMemory, *confidenceIntervalMemory)
+	upperBoundCPU = WithCPUConfidenceMultiplier(1.0, 0.25, upperBoundCPU, *confidenceIntervalCPU)
+	upperBoundMemory = WithMemoryConfidenceMultiplier(1.0, 0.25, upperBoundMemory, *confidenceIntervalMemory)
 
 	// Apply confidence multiplier to the lower bound estimator. This means
 	// that the updater will be less eager to evict pods with short history
