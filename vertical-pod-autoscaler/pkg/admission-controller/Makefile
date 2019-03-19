@@ -1,7 +1,7 @@
 all: build
 
-TAG?=dev
-REGISTRY?=staging-k8s.gcr.io
+TAG?=latest
+REGISTRY?=arisechurch
 FLAGS=
 TEST_ENVVAR=LD_FLAGS=-s GO111MODULE=on
 ENVVAR=CGO_ENABLED=0 $(TEST_ENVVAR)
@@ -9,7 +9,7 @@ GOOS?=linux
 COMPONENT=admission-controller
 FULL_COMPONENT=vpa-${COMPONENT}
 
-ALL_ARCHITECTURES?=amd64 arm arm64 ppc64le s390x
+ALL_ARCHITECTURES=amd64
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
 build: clean

@@ -15,6 +15,7 @@
 
 # VSCode project files
 **/.vscode
+.history/
 
 # Emacs save files
 *~
@@ -27,4 +28,3 @@
 *.un~
 Session.vim
 .netrwhist
-

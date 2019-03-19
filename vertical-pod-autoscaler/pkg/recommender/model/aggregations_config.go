@@ -67,7 +67,7 @@ const (
 	// DefaultHistogramBucketSizeGrowth is the default value for HistogramBucketSizeGrowth.
 	DefaultHistogramBucketSizeGrowth = 0.05 // Make each bucket 5% larger than the previous one.
 	// DefaultMemoryHistogramDecayHalfLife is the default value for MemoryHistogramDecayHalfLife.
-	DefaultMemoryHistogramDecayHalfLife = time.Hour * 24
+	DefaultMemoryHistogramDecayHalfLife = time.Hour * 12
 	// DefaultCPUHistogramDecayHalfLife is the default value for CPUHistogramDecayHalfLife.
 	// CPU usage sample to lose half of its weight.
 	DefaultCPUHistogramDecayHalfLife = time.Hour * 24
@@ -80,10 +80,10 @@ func (a *AggregationsConfig) GetMemoryAggregationWindowLength() time.Duration {
 
 func (a *AggregationsConfig) cpuHistogramOptions() util.HistogramOptions {
 	// CPU histograms use exponential bucketing scheme with the smallest bucket
-	// size of 0.01 core, max of 1000.0 cores and the relative error of HistogramRelativeError.
+	// size of 0.001 core, max of 1000.0 cores and the relative error of HistogramRelativeError.
 	//
 	// When parameters below are changed SupportedCheckpointVersion has to be bumped.
-	options, err := util.NewExponentialHistogramOptions(1000.0, 0.01, 1.+a.HistogramBucketSizeGrowth, epsilon)
+	options, err := util.NewExponentialHistogramOptions(1000.0, 0.001, 1.+a.HistogramBucketSizeGrowth, epsilon)
 	if err != nil {
 		panic("Invalid CPU histogram options") // Should not happen.
 	}
@@ -92,10 +92,10 @@ func (a *AggregationsConfig) cpuHistogramOptions() util.HistogramOptions {
 
 func (a *AggregationsConfig) memoryHistogramOptions() util.HistogramOptions {
 	// Memory histograms use exponential bucketing scheme with the smallest
-	// bucket size of 10MB, max of 1TB and the relative error of HistogramRelativeError.
+	// bucket size of 1MB, max of 1TB and the relative error of HistogramRelativeError.
 	//
 	// When parameters below are changed SupportedCheckpointVersion has to be bumped.
-	options, err := util.NewExponentialHistogramOptions(1e12, 1e7, 1.+a.HistogramBucketSizeGrowth, epsilon)
+	options, err := util.NewExponentialHistogramOptions(1e12, 1e6, 1.+a.HistogramBucketSizeGrowth, epsilon)
 	if err != nil {
 		panic("Invalid memory histogram options") // Should not happen.
 	}

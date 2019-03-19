@@ -19,6 +19,7 @@ package eviction
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -57,8 +58,8 @@ type podsEvictionRestrictionImpl struct {
 
 type singleGroupStats struct {
 	configured        int
-	pending           int
-	running           int
+	notReady          int
+	ready             int
 	evictionTolerance int
 	evicted           int
 }
@@ -106,11 +107,11 @@ func (e *podsEvictionRestrictionImpl) CanEvict(pod *apiv1.Pod) bool {
 		}
 		if present {
 			shouldBeAlive := singleGroupStats.configured - singleGroupStats.evictionTolerance
-			if singleGroupStats.running-singleGroupStats.evicted > shouldBeAlive {
+			if singleGroupStats.ready-singleGroupStats.evicted > shouldBeAlive {
 				return true
 			}
 			// If all pods are running and eviction tollerance is small evict 1 pod.
-			if singleGroupStats.running == singleGroupStats.configured &&
+			if singleGroupStats.ready == singleGroupStats.configured &&
 				singleGroupStats.evictionTolerance == 0 &&
 				singleGroupStats.evicted == 0 {
 				return true
@@ -130,6 +131,69 @@ func (e *podsEvictionRestrictionImpl) Evict(podToEvict *apiv1.Pod, eventRecorder
 
 	if !e.CanEvict(podToEvict) {
 		return fmt.Errorf("cannot evict pod %v : eviction budget exceeded", podToEvict.Name)
+	}
+
+	ownerRefs := podToEvict.GetOwnerReferences()
+	for _, ownerRef := range ownerRefs {
+		if ownerRef.Kind != "ReplicaSet" {
+			continue
+		}
+
+		replicaSet, err := e.client.AppsV1().
+			ReplicaSets(podToEvict.Namespace).
+			Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("failed to find ReplicaSet for pod %s/%s, error: %v", podToEvict.Namespace, podToEvict.Name, err)
+			return err
+		}
+
+		rsOwnerRefs := replicaSet.GetOwnerReferences()
+		for _, rsOwnerRef := range rsOwnerRefs {
+			if rsOwnerRef.Kind != "Deployment" {
+				continue
+			}
+
+			deployments := e.client.AppsV1().Deployments(podToEvict.Namespace)
+			deployment, err := deployments.Get(context.TODO(), rsOwnerRef.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.Errorf("failed to find Deployment for pod %s/%s, error: %v", podToEvict.Namespace, podToEvict.Name, err)
+				return err
+			}
+
+			labels := deployment.Spec.Template.GetLabels()
+
+			// 30 minutes between updates
+			previousUpdatedAtStr, ok := labels["vpaUpdatedAt"]
+			if ok {
+				previousUpdatedAt, err := strconv.ParseInt(
+					previousUpdatedAtStr,
+					10,
+					64,
+				)
+				if err == nil {
+					previousUpdate := time.Unix(int64(previousUpdatedAt), 0)
+					duration := time.Since(previousUpdate)
+					if duration.Minutes() < 30 {
+						return fmt.Errorf("cannot evict pod %v : not enough time elapsed since previous update", podToEvict.Name)
+					}
+				}
+			}
+
+			labels["vpaUpdatedAt"] = fmt.Sprintf("%d", time.Now().Unix())
+			deployment.Spec.Template.SetLabels(labels)
+			if _, err := deployments.Update(context.TODO(), deployment, metav1.UpdateOptions{}); err != nil {
+				klog.Errorf("failed to update Deployment for pod %s/%s, error: %v", podToEvict.Namespace, podToEvict.Name, err)
+				return err
+			}
+
+			singleGroupStats, present := e.creatorToSingleGroupStatsMap[cr]
+			if !present {
+				return fmt.Errorf("Internal error - cannot find stats for replication group %v", cr)
+			}
+			singleGroupStats.evicted = int(deployment.Status.ReadyReplicas)
+			e.creatorToSingleGroupStatsMap[cr] = singleGroupStats
+			return nil
+		}
 	}
 
 	eviction := &policyv1.Eviction{
@@ -247,11 +311,15 @@ func (f *podsEvictionRestrictionFactoryImpl) NewPodsEvictionRestriction(pods []*
 		singleGroup.evictionTolerance = int(float64(configured) * f.evictionToleranceFraction)
 		for _, pod := range replicas {
 			podToReplicaCreatorMap[getPodID(pod)] = creator
-			if pod.Status.Phase == apiv1.PodPending {
-				singleGroup.pending = singleGroup.pending + 1
+
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if !containerStatus.Ready {
+					singleGroup.notReady = singleGroup.notReady + 1
+					break
+				}
 			}
 		}
-		singleGroup.running = len(replicas) - singleGroup.pending
+		singleGroup.ready = len(replicas) - singleGroup.notReady
 		creatorToSingleGroupStatsMap[creator] = singleGroup
 	}
 	return &podsEvictionRestrictionImpl{

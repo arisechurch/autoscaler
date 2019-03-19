@@ -11,8 +11,6 @@ spec:
     plural: verticalpodautoscalers
     singular: verticalpodautoscaler
     kind: VerticalPodAutoscaler
-    shortNames:
-      - vpa
   validation:
     # openAPIV3Schema is the schema for validating custom objects.
     openAPIV3Schema:
@@ -50,5 +48,3 @@ spec:
     plural: verticalpodautoscalercheckpoints
     singular: verticalpodautoscalercheckpoint
     kind: VerticalPodAutoscalerCheckpoint
-    shortNames:
-      - vpacheckpoint

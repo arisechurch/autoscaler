@@ -28,7 +28,7 @@ var (
 	safetyMarginFraction = flag.Float64("recommendation-margin-fraction", 0.15, `Fraction of usage added as the safety margin to the recommended request`)
 	podMinCPUMillicores  = flag.Float64("pod-recommendation-min-cpu-millicores", 25, `Minimum CPU recommendation for a pod`)
 	podMinMemoryMb       = flag.Float64("pod-recommendation-min-memory-mb", 250, `Minimum memory recommendation for a pod`)
-	targetCPUPercentile  = flag.Float64("target-cpu-percentile", 0.9, "CPU usage percentile that will be used as a base for CPU target recommendation. Doesn't affect CPU lower bound, CPU upper bound nor memory recommendations.")
+	targetCPUPercentile  = flag.Float64("target-cpu-percentile", 0.7, "CPU usage percentile that will be used as a base for CPU target recommendation. Doesn't affect CPU lower bound, CPU upper bound nor memory recommendations.")
 )
 
 // PodResourceRecommender computes resource recommendation for a Vpa object.
@@ -103,11 +103,11 @@ func FilterControlledResources(estimation model.Resources, controlledResources [
 // CreatePodResourceRecommender returns the primary recommender.
 func CreatePodResourceRecommender() PodResourceRecommender {
 	lowerBoundCPUPercentile := 0.5
-	upperBoundCPUPercentile := 0.95
+	upperBoundCPUPercentile := 0.9
 
-	targetMemoryPeaksPercentile := 0.9
-	lowerBoundMemoryPeaksPercentile := 0.5
-	upperBoundMemoryPeaksPercentile := 0.95
+	targetMemoryPeaksPercentile := 0.6
+	lowerBoundMemoryPeaksPercentile := 0.4
+	upperBoundMemoryPeaksPercentile := 0.8
 
 	targetEstimator := NewPercentileEstimator(*targetCPUPercentile, targetMemoryPeaksPercentile)
 	lowerBoundEstimator := NewPercentileEstimator(lowerBoundCPUPercentile, lowerBoundMemoryPeaksPercentile)
@@ -120,15 +120,15 @@ func CreatePodResourceRecommender() PodResourceRecommender {
 	// Apply confidence multiplier to the upper bound estimator. This means
 	// that the updater will be less eager to evict pods with short history
 	// in order to reclaim unused resources.
-	// Using the confidence multiplier 1 with exponent +1 means that
-	// the upper bound is multiplied by (1 + 1/history-length-in-days).
+	// Using the confidence multiplier 0.25 with exponent +1 means that
+	// the upper bound is multiplied by (1 + 0.25/history-length-in-days).
 	// See estimator.go to see how the history length and the confidence
 	// multiplier are determined. The formula yields the following multipliers:
 	// No history     : *INF  (do not force pod eviction)
-	// 12h history    : *3    (force pod eviction if the request is > 3 * upper bound)
-	// 24h history    : *2
-	// 1 week history : *1.14
-	upperBoundEstimator = WithConfidenceMultiplier(1.0, 1.0, upperBoundEstimator)
+	// 2h history     : *4    (force pod eviction if the request is > 3 * upper bound)
+	// 6h history     : *2
+	// 12h history    : *1.5
+	upperBoundEstimator = WithConfidenceMultiplier(1.0, 0.25, upperBoundEstimator)
 
 	// Apply confidence multiplier to the lower bound estimator. This means
 	// that the updater will be less eager to evict pods with short history

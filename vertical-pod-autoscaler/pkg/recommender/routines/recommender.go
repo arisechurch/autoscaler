@@ -217,8 +217,8 @@ func (c RecommenderFactory) Make() Recommender {
 		vpaClient:                     c.VpaClient,
 		podResourceRecommender:        c.PodResourceRecommender,
 		recommendationPostProcessor:   c.RecommendationPostProcessors,
-		lastAggregateContainerStateGC: time.Now(),
-		lastCheckpointGC:              time.Now(),
+		lastAggregateContainerStateGC: time.Unix(0, 0),
+		lastCheckpointGC:              time.Unix(0, 0),
 	}
 	klog.V(3).Infof("New Recommender created %+v", recommender)
 	return recommender
